@@ -1,0 +1,214 @@
+{
+  "name": "Job Alert",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyX",
+              "value": 5,
+              "unit": "minutes"
+            }
+          ]
+        }
+      },
+      "name": "Cron Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        -1100,
+        0
+      ],
+      "id": "1e92b6a2-14b6-47a1-bde5-8c1558c7c70a"
+    },
+    {
+      "parameters": {
+        "url": "https://www.google.co.in/alerts/feeds/04915236839896086991/5551691188256910506",
+        "options": {}
+      },
+      "name": "Google Jobs RSS",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [
+        -880,
+        0
+      ],
+      "id": "81260d15-ccf6-4b1c-90f5-d617323ea94b"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"title\"]}}",
+              "operation": "contains",
+              "value2": "Product manager"
+            },
+            {
+              "value1": "={{$json[\"title\"]}}",
+              "operation": "contains",
+              "value2": "product marketing"
+            },
+            {
+              "value1": "={{$json[\"title\"]}}",
+              "operation": "contains",
+              "value2": "product"
+            }
+          ]
+        },
+        "combineOperation": "any"
+      },
+      "name": "Keyword Filter",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -660,
+        0
+      ],
+      "id": "ee3c72f5-9066-4fa9-9885-1aa36483e73a"
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "job_title",
+              "value": "={{ \n  $json.title.includes(' - ') \n    ? $json.title.split(' - ').slice(0, -1).join(' - ').trim() \n    : $json.title \n}}\n"
+            },
+            {
+              "name": "company",
+              "value": "={{ \n  $json.title.includes(' - ') \n    ? $json.title.split(' - ').slice(-1)[0].replace(' Careers','').trim() \n    : 'Unknown'\n}}\n"
+            },
+            {
+              "name": "job_url",
+              "value": "={{$json[\"link\"]}}"
+            },
+            {
+              "name": "apply_link",
+              "value": "={{$json[\"link\"]}}"
+            },
+            {
+              "name": "source",
+              "value": "Google Jobs"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Normalize Job Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -440,
+        0
+      ],
+      "id": "5377206f-c208-4b50-ac0d-f228c323dc7a"
+    },
+    {
+      "parameters": {
+        "functionCode": "const staticData = this.getWorkflowStaticData('global');\nif (!staticData.jobs) staticData.jobs = [];\n\nif (staticData.jobs.includes($json.job_url)) {\n  return [];\n}\n\nstaticData.jobs.push($json.job_url);\nreturn items;"
+      },
+      "name": "Deduplicate Jobs",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -220,
+        0
+      ],
+      "id": "27eedb0e-5b04-42a9-a8fd-d246c3e8fa98"
+    },
+    {
+      "parameters": {
+        "channel": "#job-alerts",
+        "text": "=🚨 *New Job Alert!*\n\n💼 *Role:* {{$json.job_title}}\n🏢 *Company:* {{$json.company}}\n🌍 *Source:* {{$json.source}}\n\n👉 *Apply Here:* {{$json.apply_link}}",
+        "otherOptions": {},
+        "attachments": []
+      },
+      "name": "Send to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "2686f362-47e2-4e5d-99e8-7d6d46f1f3d5",
+      "credentials": {
+        "slackApi": {
+          "id": "K2GubcHdXNfVoBGK",
+          "name": "Slack account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Cron Trigger": {
+      "main": [
+        [
+          {
+            "node": "Google Jobs RSS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Jobs RSS": {
+      "main": [
+        [
+          {
+            "node": "Keyword Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keyword Filter": {
+      "main": [
+        [
+          {
+            "node": "Normalize Job Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Job Data": {
+      "main": [
+        [
+          {
+            "node": "Deduplicate Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicate Jobs": {
+      "main": [
+        [
+          {
+            "node": "Send to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "15c1ae92-6549-465c-ad69-67cd2cd7d83a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0ae1d446f40f758a16e7995cec8a611562ec2c99f127935537419ecb7a65c0db"
+  },
+  "id": "qvk48aqsuRKJ4j7Y",
+  "tags": []
+}
